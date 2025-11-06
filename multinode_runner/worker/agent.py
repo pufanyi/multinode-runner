@@ -61,7 +61,8 @@ class WorkerAgent:
             message = await read_message(reader)
             msg_type = message.get("type")
             if msg_type == "run_task":
-                await self._start_task(message["task_id"], message.get("command", ""), writer)
+                if task_id := message.get("task_id"):
+                    await self._start_task(task_id, message.get("command", ""), writer)
             elif msg_type == "stop_task":
                 await self._stop_task(message.get("task_id"))
             else:
