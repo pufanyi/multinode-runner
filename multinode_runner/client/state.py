@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
 
 
 @dataclass
@@ -12,9 +11,8 @@ class TaskInfo:
 
     command: str
     created_at: float
-    workers: Dict[str, Dict[str, Optional[int]]] = field(default_factory=dict)
-    logs: List[Dict[str, str]] = field(default_factory=list)
+    workers: dict[str, dict[str, int | None]] = field(default_factory=dict)
+    logs: list[dict[str, str]] = field(default_factory=list)
 
 
 __all__ = ["TaskInfo"]
-

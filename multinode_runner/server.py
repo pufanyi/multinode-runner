@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Optional
 
 from .master import MasterServer
 from .worker import WorkerAgent
@@ -16,7 +15,7 @@ class ServerApplication:
         self.master_host = master_host
         self.port = port
         self.bind_host = bind_host
-        self.master: Optional[MasterServer] = None
+        self.master: MasterServer | None = None
 
     async def run(self) -> None:
         connect_host = self._normalize_master_host(self.master_host)

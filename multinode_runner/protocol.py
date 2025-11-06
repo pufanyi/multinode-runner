@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import asyncio
 import json
-from typing import Any, Dict
+from typing import Any
 
-Message = Dict[str, Any]
+Message = dict[str, Any]
 
 
 def encode_message(message: Message) -> bytes:

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from ..protocol import Message
@@ -15,8 +15,8 @@ class WorkerRunState:
     """Mutable state for a single worker execution."""
 
     status: str = "pending"
-    returncode: Optional[int] = None
-    logs: List[Dict[str, str]] = field(default_factory=list)
+    returncode: int | None = None
+    logs: list[dict[str, str]] = field(default_factory=list)
 
 
 @dataclass
@@ -26,7 +26,7 @@ class TaskRecord:
     task_id: str
     command: str
     created_at: float
-    workers: Dict[str, WorkerRunState]
+    workers: dict[str, WorkerRunState]
 
 
 @dataclass
@@ -37,7 +37,7 @@ class WorkerSession:
     hostname: str
     address: str
     writer: asyncio.StreamWriter
-    send_queue: "asyncio.Queue[Message]"
+    send_queue: asyncio.Queue[Message]
 
 
 @dataclass
@@ -46,7 +46,7 @@ class ClientSession:
 
     client_id: str
     writer: asyncio.StreamWriter
-    send_queue: "asyncio.Queue[Message]"
+    send_queue: asyncio.Queue[Message]
 
 
 __all__ = [
@@ -55,4 +55,3 @@ __all__ = [
     "WorkerSession",
     "ClientSession",
 ]
-

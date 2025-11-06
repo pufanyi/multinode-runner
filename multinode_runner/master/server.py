@@ -8,7 +8,6 @@ import json
 import socket
 import time
 import uuid
-from typing import Dict, Optional
 
 from ..protocol import Message, read_message, send_message
 from .state import ClientSession, TaskRecord, WorkerRunState, WorkerSession
@@ -20,19 +19,23 @@ class MasterServer:
     def __init__(self, bind_host: str, port: int) -> None:
         self._bind_host = bind_host
         self._port = port
-        self._server: Optional[asyncio.AbstractServer] = None
-        self._server_task: Optional[asyncio.Task[None]] = None
-        self.workers: Dict[str, WorkerSession] = {}
-        self.clients: Dict[str, ClientSession] = {}
-        self.tasks: Dict[str, TaskRecord] = {}
+        self._server: asyncio.AbstractServer | None = None
+        self._server_task: asyncio.Task[None] | None = None
+        self.workers: dict[str, WorkerSession] = {}
+        self.clients: dict[str, ClientSession] = {}
+        self.tasks: dict[str, TaskRecord] = {}
 
     async def start(self) -> None:
         """Start accepting connections in the background."""
 
         if self._server is not None:
             return
-        self._server = await asyncio.start_server(self._handle_connection, self._bind_host, self._port)
-        sockets = ", ".join(self._describe_socket(sock) for sock in self._server.sockets or [])
+        self._server = await asyncio.start_server(
+            self._handle_connection, self._bind_host, self._port
+        )
+        sockets = ", ".join(
+            self._describe_socket(sock) for sock in self._server.sockets or []
+        )
         print(f"[master] listening on {sockets or 'unknown socket'}")
         self._server_task = asyncio.create_task(self._server.serve_forever())
 
@@ -48,7 +51,9 @@ class MasterServer:
         self._server = None
         self._server_task = None
 
-    async def _handle_connection(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+    async def _handle_connection(
+        self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
+    ) -> None:
         peer = writer.get_extra_info("peername")
         address = f"{peer[0]}:{peer[1]}" if peer else "unknown"
         try:
@@ -61,7 +66,10 @@ class MasterServer:
 
         role = register.get("role")
         if register.get("type") != "register" or role not in {"worker", "client"}:
-            await send_message(writer, {"type": "error", "message": "first message must be role registration"})
+            await send_message(
+                writer,
+                {"type": "error", "message": "first message must be role registration"},
+            )
             writer.close()
             await writer.wait_closed()
             return
@@ -80,14 +88,20 @@ class MasterServer:
             await self._accept_worker(session, reader)
         else:
             client_id = str(uuid.uuid4())
-            session = ClientSession(client_id=client_id, writer=writer, send_queue=asyncio.Queue())
+            session = ClientSession(
+                client_id=client_id, writer=writer, send_queue=asyncio.Queue()
+            )
             await send_message(writer, {"type": "registered", "client_id": client_id})
             await self._accept_client(session, reader)
 
-    async def _accept_worker(self, session: WorkerSession, reader: asyncio.StreamReader) -> None:
+    async def _accept_worker(
+        self, session: WorkerSession, reader: asyncio.StreamReader
+    ) -> None:
         worker_id = session.worker_id
         self.workers[worker_id] = session
-        sender = asyncio.create_task(self._drain_queue(session.send_queue, session.writer))
+        sender = asyncio.create_task(
+            self._drain_queue(session.send_queue, session.writer)
+        )
         await self._broadcast_cluster()
         print(f"[master] worker {session.hostname} ({worker_id}) connected")
         try:
@@ -104,10 +118,14 @@ class MasterServer:
             with contextlib.suppress(Exception):
                 await session.writer.wait_closed()
 
-    async def _accept_client(self, session: ClientSession, reader: asyncio.StreamReader) -> None:
+    async def _accept_client(
+        self, session: ClientSession, reader: asyncio.StreamReader
+    ) -> None:
         client_id = session.client_id
         self.clients[client_id] = session
-        sender = asyncio.create_task(self._drain_queue(session.send_queue, session.writer))
+        sender = asyncio.create_task(
+            self._drain_queue(session.send_queue, session.writer)
+        )
         await self._send_initial_state(session)
         print(f"[master] client {client_id} connected")
         try:
@@ -123,12 +141,16 @@ class MasterServer:
             with contextlib.suppress(Exception):
                 await session.writer.wait_closed()
 
-    async def _handle_worker_message(self, session: WorkerSession, message: Message) -> None:
+    async def _handle_worker_message(
+        self, session: WorkerSession, message: Message
+    ) -> None:
         msg_type = message.get("type")
         if msg_type == "task_started":
             await self._mark_task_running(message["task_id"], session.worker_id)
         elif msg_type == "task_finished":
-            await self._mark_task_finished(message["task_id"], session.worker_id, message.get("returncode"))
+            await self._mark_task_finished(
+                message["task_id"], session.worker_id, message.get("returncode")
+            )
         elif msg_type == "task_log":
             await self._handle_task_log(
                 message["task_id"],
@@ -137,27 +159,39 @@ class MasterServer:
                 message.get("line", ""),
             )
         else:
-            print(f"[master] unhandled message from worker {session.worker_id}: {json.dumps(message)}")
+            print(
+                f"[master] unhandled message from worker {session.worker_id}: {json.dumps(message)}"
+            )
 
-    async def _handle_client_message(self, session: ClientSession, message: Message) -> None:
+    async def _handle_client_message(
+        self, session: ClientSession, message: Message
+    ) -> None:
         msg_type = message.get("type")
         if msg_type == "submit_task":
             command = message.get("command")
             if not isinstance(command, str) or not command.strip():
-                await session.send_queue.put({"type": "error", "message": "command must be a non-empty string"})
+                await session.send_queue.put(
+                    {"type": "error", "message": "command must be a non-empty string"}
+                )
                 return
             task = await self._create_task(command)
-            await session.send_queue.put({"type": "submit_ack", "task_id": task.task_id})
+            await session.send_queue.put(
+                {"type": "submit_ack", "task_id": task.task_id}
+            )
         elif msg_type == "stop_task":
             task_id = message.get("task_id")
             if isinstance(task_id, str) and task_id in self.tasks:
                 await self._stop_task(task_id)
             else:
-                await session.send_queue.put({"type": "error", "message": f"unknown task {task_id!r}"})
+                await session.send_queue.put(
+                    {"type": "error", "message": f"unknown task {task_id!r}"}
+                )
         elif msg_type == "request_state":
             await self._send_initial_state(session)
         else:
-            await session.send_queue.put({"type": "error", "message": f"unknown message type {msg_type!r}"})
+            await session.send_queue.put(
+                {"type": "error", "message": f"unknown message type {msg_type!r}"}
+            )
 
     async def _create_task(self, command: str) -> TaskRecord:
         task_id = str(uuid.uuid4())
@@ -170,7 +204,9 @@ class MasterServer:
         self.tasks[task_id] = task
         await self._broadcast_task_update(task)
         for worker_id, worker in list(self.workers.items()):
-            await worker.send_queue.put({"type": "run_task", "task_id": task_id, "command": command})
+            await worker.send_queue.put(
+                {"type": "run_task", "task_id": task_id, "command": command}
+            )
         print(f"[master] dispatched task {task_id} -> {command}")
         return task
 
@@ -190,7 +226,9 @@ class MasterServer:
         state.status = "running"
         await self._broadcast_task_update(task)
 
-    async def _mark_task_finished(self, task_id: str, worker_id: str, returncode: Optional[int]) -> None:
+    async def _mark_task_finished(
+        self, task_id: str, worker_id: str, returncode: int | None
+    ) -> None:
         task = self.tasks.get(task_id)
         if not task:
             return
@@ -199,7 +237,9 @@ class MasterServer:
         state.returncode = returncode
         await self._broadcast_task_update(task)
 
-    async def _handle_task_log(self, task_id: str, worker_id: str, stream: str, line: str) -> None:
+    async def _handle_task_log(
+        self, task_id: str, worker_id: str, stream: str, line: str
+    ) -> None:
         task = self.tasks.get(task_id)
         entry = {
             "task_id": task_id,
@@ -281,7 +321,9 @@ class MasterServer:
                 for entry in state.logs:
                     await session.send_queue.put({"type": "task_log", **entry})
 
-    async def _drain_queue(self, queue: "asyncio.Queue[Message]", writer: asyncio.StreamWriter) -> None:
+    async def _drain_queue(
+        self, queue: asyncio.Queue[Message], writer: asyncio.StreamWriter
+    ) -> None:
         try:
             while True:
                 message = await queue.get()
@@ -303,4 +345,3 @@ class MasterServer:
 
 
 __all__ = ["MasterServer"]
-

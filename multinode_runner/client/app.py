@@ -8,7 +8,6 @@ import json
 import sys
 import textwrap
 import time
-from typing import Dict, Optional
 
 from ..protocol import read_message, send_message
 from .state import TaskInfo
@@ -20,10 +19,10 @@ class ClientApplication:
     def __init__(self, master_host: str, port: int) -> None:
         self.master_host = master_host
         self.port = port
-        self.tasks: Dict[str, TaskInfo] = {}
-        self.workers: Dict[str, Dict[str, str]] = {}
-        self._receive_task: Optional[asyncio.Task[None]] = None
-        self._writer: Optional[asyncio.StreamWriter] = None
+        self.tasks: dict[str, TaskInfo] = {}
+        self.workers: dict[str, dict[str, str]] = {}
+        self._receive_task: asyncio.Task[None] | None = None
+        self._writer: asyncio.StreamWriter | None = None
 
     async def run(self) -> None:
         host = self._normalize_host(self.master_host)
@@ -60,7 +59,9 @@ class ClientApplication:
     async def _input_loop(self) -> None:
         loop = asyncio.get_running_loop()
         while True:
-            command = await loop.run_in_executor(None, lambda: input("client> ").strip())
+            command = await loop.run_in_executor(
+                None, lambda: input("client> ").strip()
+            )
             if not command:
                 continue
             if command in {"quit", "exit"}:
@@ -97,7 +98,7 @@ class ClientApplication:
             return
         await self._send({"type": "stop_task", "task_id": task_id})
 
-    async def _send(self, message: Dict[str, object]) -> None:
+    async def _send(self, message: dict[str, object]) -> None:
         if not self._writer:
             return
         await send_message(self._writer, message)
@@ -112,16 +113,21 @@ class ClientApplication:
         finally:
             self._writer = None
 
-    async def _handle_message(self, message: Dict[str, object]) -> None:
+    async def _handle_message(self, message: dict[str, object]) -> None:
         msg_type = message.get("type")
         if msg_type == "cluster_update":
-            self.workers = {entry["worker_id"]: entry for entry in message.get("workers", [])}
+            self.workers = {
+                entry["worker_id"]: entry for entry in message.get("workers", [])
+            }
             print(f"Updated worker list ({len(self.workers)} online)")
         elif msg_type == "task_update":
             task_id = message["task_id"]
             info = self.tasks.setdefault(
                 task_id,
-                TaskInfo(command=message.get("command", ""), created_at=float(message.get("created_at", time.time()))),
+                TaskInfo(
+                    command=message.get("command", ""),
+                    created_at=float(message.get("created_at", time.time())),
+                ),
             )
             info.command = message.get("command", info.command)
             info.created_at = float(message.get("created_at", info.created_at))
@@ -129,7 +135,9 @@ class ClientApplication:
             print(f"Task {task_id} updated")
         elif msg_type == "task_log":
             task_id = message.get("task_id")
-            info = self.tasks.setdefault(task_id, TaskInfo(command="<unknown>", created_at=time.time()))
+            info = self.tasks.setdefault(
+                task_id, TaskInfo(command="<unknown>", created_at=time.time())
+            )
             info.logs.append(message)
             worker = message.get("worker_id", "?")
             stream = message.get("stream", "stdout")
@@ -148,7 +156,9 @@ class ClientApplication:
             return
         print("Workers:")
         for worker in self.workers.values():
-            print(f"  {worker['worker_id']} ({worker.get('hostname', '?')}) @ {worker.get('address', '?')}")
+            print(
+                f"  {worker['worker_id']} ({worker.get('hostname', '?')}) @ {worker.get('address', '?')}"
+            )
 
     def _print_tasks(self) -> None:
         if not self.tasks:
@@ -156,7 +166,9 @@ class ClientApplication:
             return
         print("Tasks:")
         for task_id, info in self.tasks.items():
-            created = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(info.created_at))
+            created = time.strftime(
+                "%Y-%m-%d %H:%M:%S", time.localtime(info.created_at)
+            )
             print(f"  {task_id} -> {info.command} (submitted {created})")
             for worker_id, state in info.workers.items():
                 status = state.get("status", "unknown")
@@ -187,4 +199,3 @@ class ClientApplication:
 
 
 __all__ = ["ClientApplication"]
-
