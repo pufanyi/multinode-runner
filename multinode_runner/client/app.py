@@ -129,7 +129,7 @@ class ClientApplication:
             print(f"Task {task_id} updated")
         elif msg_type == "task_log":
             task_id = message.get("task_id")
-            info = self.tasks.setdefault(task_id, TaskInfo(command="", created_at=time.time()))
+            info = self.tasks.setdefault(task_id, TaskInfo(command="<unknown>", created_at=time.time()))
             info.logs.append(message)
             worker = message.get("worker_id", "?")
             stream = message.get("stream", "stdout")
