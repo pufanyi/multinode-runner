@@ -75,7 +75,7 @@ class ClientApplication:
                 self._print_workers()
                 continue
             if command.startswith("submit "):
-                await self._submit(command[len("submit ") :])
+                await self._submit(command[len("submit ") :].strip())
                 continue
             if command.startswith("stop "):
                 await self._stop(command[len("stop ") :].strip())
