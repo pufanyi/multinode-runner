@@ -53,7 +53,8 @@ class MasterServer:
         address = f"{peer[0]}:{peer[1]}" if peer else "unknown"
         try:
             register = await read_message(reader)
-        except Exception:
+        except (EOFError, ValueError, asyncio.IncompleteReadError) as e:
+            print(f"[master] failed to read registration from {address}: {e!r}")
             writer.close()
             await writer.wait_closed()
             return
